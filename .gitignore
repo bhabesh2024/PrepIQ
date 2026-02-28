@@ -1,8 +1,26 @@
-node_modules/
-build/
-dist/
-coverage/
-.DS_Store
+# Logs
+logs
 *.log
-.env*
-!.env.example
+npm-debug.log*
+
+# Node modules & build files
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor / IDE / Cloud environments
+.vscode/
+.idea
+.DS_Store
+.idx/
+
+# Vite and caching
+.vite/
+
+# Environment variables (NEVER COMMIT THIS)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
