@@ -1,0 +1,395 @@
+import React, { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { Navigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  LayoutDashboard, 
+  Database, 
+  AlertTriangle, 
+  Users, 
+  MessageSquare, 
+  LifeBuoy, 
+  Settings, 
+  Search,
+  Filter,
+  MoreVertical,
+  CheckCircle2,
+  XCircle,
+  TrendingUp,
+  Activity
+} from "lucide-react";
+import { cn } from "../lib/utils";
+
+type TabType = "analytics" | "questions" | "flagged" | "users" | "community" | "support" | "settings";
+
+export function AdminPanel() {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>("analytics");
+
+  // Removed auth check for demo purposes so you can view the UI
+  // if (!user || user.role !== "admin") {
+  //   return <Navigate to="/" replace />;
+  // }
+
+  const tabs = [
+    { id: "analytics", label: "App Analytics", icon: LayoutDashboard },
+    { id: "questions", label: "Questions Database", icon: Database },
+    { id: "flagged", label: "Flagged Issues", icon: AlertTriangle },
+    { id: "users", label: "User Details", icon: Users },
+    { id: "community", label: "Community Posts", icon: MessageSquare },
+    { id: "support", label: "Help & Support", icon: LifeBuoy },
+    { id: "settings", label: "Settings", icon: Settings },
+  ] as const;
+
+  return (
+    <div className="flex min-h-[calc(100vh-4rem)] bg-background">
+      {/* Sidebar */}
+      <aside className="w-64 border-r border-white/10 bg-background/50 backdrop-blur-xl hidden md:block sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+        <div className="p-6">
+          <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">Admin Controls</h2>
+          <nav className="space-y-2">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as TabType)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                    isActive 
+                      ? "bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]" 
+                      : "text-foreground/70 hover:bg-white/5 hover:text-foreground border border-transparent"
+                  )}
+                >
+                  <Icon className={cn("w-5 h-5", isActive ? "text-indigo-500" : "text-muted-foreground")} />
+                  {tab.label}
+                  {tab.id === "flagged" && (
+                    <span className="ml-auto bg-destructive text-destructive-foreground text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      14
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 p-6 md:p-8 overflow-x-hidden relative">
+        {/* Background Gradients */}
+        <div className="absolute top-[-10%] right-[-5%] w-[30%] h-[30%] rounded-full bg-indigo-500/10 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-5%] w-[30%] h-[30%] rounded-full bg-pink-500/10 blur-[100px] pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto relative z-10">
+          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                {tabs.find(t => t.id === activeTab)?.label}
+              </h1>
+              <p className="text-muted-foreground mt-1">Manage and monitor your application.</p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input 
+                  type="text" 
+                  placeholder="Search admin..." 
+                  className="bg-background/50 border border-white/10 rounded-full pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-full sm:w-64 transition-all"
+                />
+              </div>
+              <button className="glass-card p-2 rounded-full hover:bg-white/10 transition-colors">
+                <Filter className="w-5 h-5 text-foreground/70" />
+              </button>
+            </div>
+          </header>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {activeTab === "analytics" && <AnalyticsView />}
+              {activeTab === "questions" && <QuestionsView />}
+              {activeTab === "flagged" && <FlaggedView />}
+              {activeTab === "users" && <UsersView />}
+              {activeTab === "community" && <CommunityView />}
+              {activeTab === "support" && <SupportView />}
+              {activeTab === "settings" && <SettingsView />}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// --- Sub Views ---
+
+function AnalyticsView() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[
+          { label: "Total Users", value: "12,450", change: "+12%", icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
+          { label: "Active Tests", value: "842", change: "+5%", icon: Activity, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+          { label: "Questions Solved", value: "1.2M", change: "+18%", icon: Database, color: "text-purple-500", bg: "bg-purple-500/10" },
+          { label: "Revenue", value: "₹4.2L", change: "+24%", icon: TrendingUp, color: "text-amber-500", bg: "bg-amber-500/10" },
+        ].map((stat, i) => (
+          <div key={i} className="glass-card p-6 rounded-3xl relative overflow-hidden group">
+            <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full ${stat.bg} blur-2xl group-hover:blur-xl transition-all`} />
+            <div className="flex justify-between items-start mb-4 relative z-10">
+              <div className={`p-3 rounded-2xl ${stat.bg}`}>
+                <stat.icon className={`w-6 h-6 ${stat.color}`} />
+              </div>
+              <span className="text-emerald-500 text-sm font-semibold bg-emerald-500/10 px-2 py-1 rounded-lg">{stat.change}</span>
+            </div>
+            <h3 className="text-muted-foreground font-medium mb-1 relative z-10">{stat.label}</h3>
+            <div className="text-3xl font-bold text-foreground relative z-10">{stat.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 glass-card p-6 rounded-3xl min-h-[300px] flex flex-col">
+          <h3 className="font-semibold text-lg mb-4">User Growth</h3>
+          <div className="flex-1 flex items-center justify-center border border-dashed border-white/10 rounded-xl bg-background/30">
+            <span className="text-muted-foreground">Chart Placeholder (Use Recharts here)</span>
+          </div>
+        </div>
+        <div className="glass-card p-6 rounded-3xl min-h-[300px] flex flex-col">
+          <h3 className="font-semibold text-lg mb-4">Recent Activity</h3>
+          <div className="space-y-4 flex-1">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                <div>
+                  <p className="text-sm font-medium">New user registered</p>
+                  <p className="text-xs text-muted-foreground">{i * 10} mins ago</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuestionsView() {
+  return (
+    <div className="glass-card rounded-3xl overflow-hidden">
+      <div className="p-6 border-b border-white/10 flex justify-between items-center bg-background/40">
+        <h3 className="font-semibold text-lg">Question Bank</h3>
+        <button className="glow-button bg-foreground text-background px-4 py-2 rounded-xl text-sm font-semibold">
+          + Add Question
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="text-xs text-muted-foreground uppercase bg-background/50 border-b border-white/10">
+            <tr>
+              <th className="px-6 py-4 font-medium">ID</th>
+              <th className="px-6 py-4 font-medium">Subject</th>
+              <th className="px-6 py-4 font-medium">Topic</th>
+              <th className="px-6 py-4 font-medium">Difficulty</th>
+              <th className="px-6 py-4 font-medium text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <tr key={i} className="hover:bg-white/5 transition-colors">
+                <td className="px-6 py-4 font-mono text-muted-foreground">#Q{1000 + i}</td>
+                <td className="px-6 py-4 font-medium">Mathematics</td>
+                <td className="px-6 py-4">Algebra</td>
+                <td className="px-6 py-4">
+                  <span className="bg-amber-500/10 text-amber-500 px-2.5 py-1 rounded-lg text-xs font-semibold">
+                    Medium
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <button className="text-indigo-400 hover:text-indigo-300 font-medium">Edit</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function FlaggedView() {
+  return (
+    <div className="space-y-4">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="glass-card p-6 rounded-2xl flex flex-col sm:flex-row gap-6 items-start sm:items-center">
+          <div className="p-4 rounded-2xl bg-destructive/10 text-destructive shrink-0">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <h4 className="font-semibold text-lg">Incorrect Answer Key</h4>
+              <span className="text-xs text-muted-foreground font-mono">#Q1042</span>
+            </div>
+            <p className="text-muted-foreground text-sm mb-2">Reported by 3 users. The correct option should be B instead of C according to the latest NCERT syllabus.</p>
+            <div className="text-xs text-muted-foreground">Reported 2 hours ago</div>
+          </div>
+          <div className="flex gap-2 shrink-0 w-full sm:w-auto">
+            <button className="flex-1 sm:flex-none bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+              Resolve
+            </button>
+            <button className="flex-1 sm:flex-none bg-background/50 border border-white/10 hover:bg-white/5 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+              View
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UsersView() {
+  return (
+    <div className="glass-card rounded-3xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="text-xs text-muted-foreground uppercase bg-background/50 border-b border-white/10">
+            <tr>
+              <th className="px-6 py-4 font-medium">User</th>
+              <th className="px-6 py-4 font-medium">Role</th>
+              <th className="px-6 py-4 font-medium">Status</th>
+              <th className="px-6 py-4 font-medium">Joined</th>
+              <th className="px-6 py-4 font-medium text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <tr key={i} className="hover:bg-white/5 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs">
+                      U{i}
+                    </div>
+                    <div>
+                      <div className="font-medium">User {i}</div>
+                      <div className="text-xs text-muted-foreground">user{i}@example.com</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg text-xs font-medium">
+                    Student
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-1.5 text-emerald-500 text-xs font-medium">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Active
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-muted-foreground">Oct 24, 2023</td>
+                <td className="px-6 py-4 text-right">
+                  <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                    <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CommunityView() {
+  return (
+    <div className="space-y-4">
+      {[1, 2].map((i) => (
+        <div key={i} className="glass-card p-6 rounded-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center text-white font-bold">
+                A
+              </div>
+              <div>
+                <div className="font-medium">Aspirant123</div>
+                <div className="text-xs text-muted-foreground">Posted in General Discussion • 1h ago</div>
+              </div>
+            </div>
+            <span className="bg-amber-500/10 text-amber-500 px-2.5 py-1 rounded-lg text-xs font-semibold">
+              Pending Review
+            </span>
+          </div>
+          <h4 className="font-semibold text-lg mb-2">Tips for time management in Quant?</h4>
+          <p className="text-muted-foreground text-sm mb-6">I always run out of time during the quantitative section. Any strategies on which questions to skip and which to attempt first?</p>
+          <div className="flex gap-3">
+            <button className="flex items-center gap-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+              <CheckCircle2 className="w-4 h-4" /> Approve
+            </button>
+            <button className="flex items-center gap-2 bg-destructive/10 text-destructive hover:bg-destructive/20 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+              <XCircle className="w-4 h-4" /> Reject
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SupportView() {
+  return (
+    <div className="glass-card rounded-3xl p-8 text-center flex flex-col items-center justify-center min-h-[400px]">
+      <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4">
+        <LifeBuoy className="w-8 h-8 text-indigo-500" />
+      </div>
+      <h3 className="text-xl font-bold mb-2">No Active Support Tickets</h3>
+      <p className="text-muted-foreground max-w-md">All user inquiries have been resolved. Great job keeping the community happy!</p>
+    </div>
+  );
+}
+
+function SettingsView() {
+  return (
+    <div className="space-y-6">
+      <div className="glass-card rounded-3xl p-6 sm:p-8">
+        <h3 className="text-xl font-bold mb-6">General Settings</h3>
+        <div className="space-y-6 max-w-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-medium">Maintenance Mode</h4>
+              <p className="text-sm text-muted-foreground">Disable access to the app for all non-admin users.</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" value="" className="sr-only peer" />
+              <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+            </label>
+          </div>
+          <div className="border-t border-white/10 pt-6 flex items-center justify-between">
+            <div>
+              <h4 className="font-medium">Allow New Registrations</h4>
+              <p className="text-sm text-muted-foreground">Enable or disable new user signups.</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" value="" className="sr-only peer" defaultChecked />
+              <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div className="glass-card rounded-3xl p-6 sm:p-8 border-destructive/20">
+        <h3 className="text-xl font-bold mb-2 text-destructive">Danger Zone</h3>
+        <p className="text-sm text-muted-foreground mb-6">Irreversible actions for the application.</p>
+        <button className="bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+          Clear Cache & Restart
+        </button>
+      </div>
+    </div>
+  );
+}
