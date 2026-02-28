@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { auth, db } from "../lib/firebase";
+import { deleteUser } from "firebase/auth";
+import { doc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "../context/AuthContext";
 import { Navigate, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,7 +26,9 @@ import {
   ChevronRight,
   ChevronLeft,
   CreditCard,
-  Info
+  Info,
+  AlertTriangle,
+  X
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -466,8 +471,40 @@ function SupportView() {
 }
 
 function SettingsView({ logout, navigate }: { logout: () => void, navigate: any }) {
+  // Modal ke liye naye states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Asli Delete Function
+  const confirmDeleteAccount = async () => {
+    if (deleteInput !== "DELETE") return;
+    
+    setIsDeleting(true);
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      try {
+        await deleteDoc(doc(db, "profiles", currentUser.uid));
+        await deleteUser(currentUser);
+        
+        setShowDeleteModal(false);
+        logout(); 
+        navigate("/auth");
+      } catch (error: any) {
+        console.error("Error deleting account:", error);
+        if (error.code === 'auth/requires-recent-login') {
+          alert("Security alert: Please log out and log in again to verify your identity before deleting your account.");
+          setShowDeleteModal(false);
+        } else {
+          alert("Failed to delete account. Please try again later.");
+        }
+        setIsDeleting(false);
+      }
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       <div className="glass-card rounded-3xl p-6 sm:p-8">
         <h3 className="text-xl font-bold mb-6">App Preferences</h3>
         <div className="space-y-6 max-w-2xl">
@@ -527,10 +564,79 @@ function SettingsView({ logout, navigate }: { logout: () => void, navigate: any 
       <div className="glass-card rounded-3xl p-6 sm:p-8 border-destructive/20">
         <h3 className="text-xl font-bold mb-2 text-destructive">Danger Zone</h3>
         <p className="text-sm text-muted-foreground mb-6">Once you delete your account, there is no going back. Please be certain.</p>
-        <button className="bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 px-4 py-2 w-full sm:w-auto rounded-xl text-sm font-semibold transition-colors">
+        <button 
+          onClick={() => {
+            setShowDeleteModal(true);
+            setDeleteInput(""); // Modal open hone par input clear karein
+          }}
+          className="bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 px-4 py-2 w-full sm:w-auto rounded-xl text-sm font-semibold transition-colors"
+        >
           Delete Account
         </button>
       </div>
+
+      {/* --- MODERN DELETE MODAL --- */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-background/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card w-full max-w-md p-6 sm:p-8 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden"
+            >
+              {/* Lal rang ka background glow */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-destructive/20 blur-3xl rounded-full pointer-events-none" />
+              
+              <div className="flex justify-between items-start mb-6 relative z-10">
+                <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-destructive" />
+                </div>
+                <button 
+                  onClick={() => setShowDeleteModal(false)}
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors text-muted-foreground"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <h3 className="text-xl font-bold text-foreground mb-2 relative z-10">Delete Account</h3>
+              <p className="text-sm text-muted-foreground mb-6 relative z-10">
+                This action <strong className="text-foreground">cannot be undone</strong>. This will permanently delete your account, performance history, and all saved data.
+              </p>
+
+              <div className="mb-6 relative z-10">
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  To confirm, type <strong className="text-destructive select-all">DELETE</strong> below:
+                </label>
+                <input
+                  type="text"
+                  value={deleteInput}
+                  onChange={(e) => setDeleteInput(e.target.value)}
+                  placeholder="Type DELETE"
+                  className="w-full rounded-xl border-0 py-2.5 text-foreground ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-destructive bg-background/50 px-4 transition-all uppercase"
+                />
+              </div>
+
+              <div className="flex gap-3 relative z-10">
+                <button 
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-foreground px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmDeleteAccount}
+                  disabled={deleteInput !== "DELETE" || isDeleting}
+                  className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                >
+                  {isDeleting ? "Deleting..." : "Permanently Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

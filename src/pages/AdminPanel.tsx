@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { db } from "../lib/firebase"; // Firebase import kiya
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { 
   LayoutDashboard, 
   Database, 
@@ -16,23 +18,33 @@ import {
   CheckCircle2,
   XCircle,
   TrendingUp,
-  Activity
+  Activity,
+  Upload, Download, BookOpen, Edit2
 } from "lucide-react";
 import { cn } from "../lib/utils";
-
-type TabType = "analytics" | "questions" | "flagged" | "users" | "community" | "support" | "settings";
+type TabType = "analytics" | "questions" | "flagged" | "users" | "community" | "support" | "settings" | "concepts";
 
 export function AdminPanel() {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>("analytics");
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  // Naya 'concepts' tab add kiya
+  const [activeTab, setActiveTab] = useState<TabType | "concepts">("analytics");
 
-  // Removed auth check for demo purposes so you can view the UI
-  // if (!user || user.role !== "admin") {
-  //   return <Navigate to="/" replace />;
-  // }
+  // --- SECURITY LOGIC ---
+  useEffect(() => {
+    // Agar loading khatam ho gayi, user nahi hai, ya user admin nahi hai, toh Home pe bhej do
+    if (!loading && (!user || user.role !== "admin")) {
+      navigate("/");
+    }
+  }, [user, loading, navigate]);
+
+  if (loading || !user || user.role !== "admin") {
+    return <div className="min-h-screen flex items-center justify-center">Loading Admin Securely...</div>;
+  }
 
   const tabs = [
     { id: "analytics", label: "App Analytics", icon: LayoutDashboard },
+    { id: "concepts", label: "Study Concepts", icon: BookOpen }, // NAYA TAB
     { id: "questions", label: "Questions Database", icon: Database },
     { id: "flagged", label: "Flagged Issues", icon: AlertTriangle },
     { id: "users", label: "User Details", icon: Users },
@@ -121,6 +133,7 @@ export function AdminPanel() {
               {activeTab === "community" && <CommunityView />}
               {activeTab === "support" && <SupportView />}
               {activeTab === "settings" && <SettingsView />}
+              {activeTab === "concepts" && <ConceptsView />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -182,43 +195,143 @@ function AnalyticsView() {
 }
 
 function QuestionsView() {
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 1. Firebase se Real Data Fetch karna
+  const fetchQuestions = async () => {
+    setLoading(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, "questions"));
+      const qData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setQuestions(qData);
+    } catch (error) {
+      console.error("Error fetching questions:", error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchQuestions();
+  }, []);
+
+  // 2. JSON File Upload & Firebase me Bulk Save karna
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result as string);
+        const questionsArray = Array.isArray(jsonData) ? jsonData : [jsonData]; // Agar single object ho toh array banayein
+        
+        // Firebase me ek sath data daalne ke liye Batch ka use karte hain
+        const batch = writeBatch(db);
+        questionsArray.forEach((q) => {
+          const docRef = doc(collection(db, "questions"));
+          batch.set(docRef, q);
+        });
+
+        await batch.commit();
+        alert(`Successfully uploaded ${questionsArray.length} questions!`);
+        fetchQuestions(); // Naya data UI me laane ke liye refresh
+      } catch (error) {
+        console.error("Upload error:", error);
+        alert("Invalid JSON format or Upload Failed!");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // 3. Bulk Download Data
+  const handleDownloadJSON = () => {
+    // Data se Firebase wali 'id' hata dete hain export ke time (clean data)
+    const exportData = questions.map(({ id, ...rest }) => rest);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "prepiq_questions_backup.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
+
   return (
     <div className="glass-card rounded-3xl overflow-hidden">
-      <div className="p-6 border-b border-white/10 flex justify-between items-center bg-background/40">
-        <h3 className="font-semibold text-lg">Question Bank</h3>
-        <button className="glow-button bg-foreground text-background px-4 py-2 rounded-xl text-sm font-semibold">
-          + Add Question
-        </button>
+      <div className="p-6 border-b border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-background/40 gap-4">
+        <h3 className="font-semibold text-lg">Question Bank ({questions.length})</h3>
+        
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleDownloadJSON}
+            className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+          >
+            <Download className="w-4 h-4" /> Download All
+          </button>
+          
+          <input 
+            type="file" 
+            accept=".json" 
+            className="hidden" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="glow-button flex items-center gap-2 bg-foreground text-background px-4 py-2 rounded-xl text-sm font-semibold"
+          >
+            <Upload className="w-4 h-4" /> Upload JSON
+          </button>
+        </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="text-xs text-muted-foreground uppercase bg-background/50 border-b border-white/10">
-            <tr>
-              <th className="px-6 py-4 font-medium">ID</th>
-              <th className="px-6 py-4 font-medium">Subject</th>
-              <th className="px-6 py-4 font-medium">Topic</th>
-              <th className="px-6 py-4 font-medium">Difficulty</th>
-              <th className="px-6 py-4 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <tr key={i} className="hover:bg-white/5 transition-colors">
-                <td className="px-6 py-4 font-mono text-muted-foreground">#Q{1000 + i}</td>
-                <td className="px-6 py-4 font-medium">Mathematics</td>
-                <td className="px-6 py-4">Algebra</td>
-                <td className="px-6 py-4">
-                  <span className="bg-amber-500/10 text-amber-500 px-2.5 py-1 rounded-lg text-xs font-semibold">
-                    Medium
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button className="text-indigo-400 hover:text-indigo-300 font-medium">Edit</button>
-                </td>
+      
+      <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+        {loading ? (
+          <div className="p-8 text-center text-muted-foreground animate-pulse">Fetching real data from database...</div>
+        ) : questions.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">No questions found. Upload a JSON file to begin.</div>
+        ) : (
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-muted-foreground uppercase bg-background/50 border-b border-white/10 sticky top-0 z-10 backdrop-blur-md">
+              <tr>
+                <th className="px-6 py-4 font-medium">Subject & Topic</th>
+                <th className="px-6 py-4 font-medium">Question Preview</th>
+                <th className="px-6 py-4 font-medium">Difficulty</th>
+                <th className="px-6 py-4 font-medium text-right">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {questions.map((q) => (
+                <tr key={q.id} className="hover:bg-white/5 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="font-medium">{q.subject}</div>
+                    <div className="text-xs text-muted-foreground">{q.topic} - {q.subtopic}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="line-clamp-2 max-w-md">{q.question}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold",
+                      q.difficulty === 'Easy' ? "bg-emerald-500/10 text-emerald-500" :
+                      q.difficulty === 'Hard' ? "bg-destructive/10 text-destructive" :
+                      "bg-amber-500/10 text-amber-500"
+                    )}>
+                      {q.difficulty}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button className="p-2 hover:bg-white/10 rounded-lg text-indigo-400 transition-colors">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
@@ -392,4 +505,8 @@ function SettingsView() {
       </div>
     </div>
   );
+}
+
+function ConceptsView() {
+    return <div>Concepts View Placeholder</div>;
 }

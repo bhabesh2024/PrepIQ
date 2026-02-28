@@ -1,58 +1,72 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { auth, db } from "../lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
-type User = {
-  id: number;
-  name: string;
-  role: string;
-};
-
-type AuthContextType = {
-  user: User | null;
-  token: string | null;
-  login: (token: string, user: User) => void;
+interface AuthContextType {
+  user: any;
+  loading: boolean;
+  login: (token: string, userData: any) => void;
   logout: () => void;
-};
+}
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+export const useAuth = () => useContext(AuthContext);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true); // <--- Bug yahan fix hoga
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    }
+    // Firebase background mein check karega ki session zinda hai ya nahi
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // Firestore se user ki baaki details (name, username) laao
+          const docRef = doc(db, "profiles", firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            setUser({ ...firebaseUser, ...docSnap.data() });
+          } else {
+            setUser(firebaseUser);
+          }
+        } catch (error) {
+          console.error("Error fetching profile:", error);
+          setUser(firebaseUser);
+        }
+      } else {
+        setUser(null); // Koi logged in nahi hai
+      }
+      setLoading(false); // Checking poori ho gayi, loading band karo
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken);
-    setUser(newUser);
-    localStorage.setItem("token", newToken);
-    localStorage.setItem("user", JSON.stringify(newUser));
+  const login = (token: string, userData: any) => {
+    setUser(userData);
   };
 
-  const logout = () => {
-    setToken(null);
+  const logout = async () => {
+    await auth.signOut();
     setUser(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
   };
+
+  // Jab tak check chal raha hai, app ko wait karwao aur ek loader dikhao
+  // (Is se refresh par user bahar nahi fenka jayega)
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-}
+};
