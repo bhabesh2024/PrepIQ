@@ -19,7 +19,8 @@ import {
   XCircle,
   TrendingUp,
   Activity,
-  Upload, Download, BookOpen, Edit2
+  Upload, Download, BookOpen, Edit2,
+  Trash2
 } from "lucide-react";
 import { cn } from "../lib/utils";
 type TabType = "analytics" | "questions" | "flagged" | "users" | "community" | "support" | "settings" | "concepts";
@@ -199,7 +200,11 @@ function QuestionsView() {
   const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Firebase se Real Data Fetch karna
+  // --- NAYE STATES (Search, Filter, Select) ---
+  const [searchQuery, setSearchQuery] = useState("");
+  const [topicFilter, setTopicFilter] = useState("All");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
   const fetchQuestions = async () => {
     setLoading(true);
     try {
@@ -212,43 +217,85 @@ function QuestionsView() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchQuestions();
-  }, []);
+  useEffect(() => { fetchQuestions(); }, []);
 
-  // 2. JSON File Upload & Firebase me Bulk Save karna
+  // --- FILTER & SEARCH LOGIC ---
+  const uniqueTopics = ["All", ...Array.from(new Set(questions.map(q => q.chapterId || q.topic))).filter(Boolean)];
+  
+  const filteredQuestions = questions.filter(q => {
+    const matchesSearch = q.question?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          q.subject?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTopic = topicFilter === "All" || q.chapterId === topicFilter || q.topic === topicFilter;
+    return matchesSearch && matchesTopic;
+  });
+
+  // --- SELECTION LOGIC ---
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      // Sirf filter kiye hue questions ko select karo
+      setSelectedIds(filteredQuestions.map(q => q.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  // --- BULK DELETE LOGIC ---
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    const confirmMsg = `Are you sure you want to permanently delete ${selectedIds.length} questions?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedIds.forEach(id => {
+        batch.delete(doc(db, "questions", id));
+      });
+      await batch.commit();
+      
+      alert(`Successfully deleted ${selectedIds.length} items!`);
+      setSelectedIds([]);
+      fetchQuestions(); // Refresh data
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete items.");
+    }
+    setLoading(false);
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const jsonData = JSON.parse(e.target?.result as string);
-        const questionsArray = Array.isArray(jsonData) ? jsonData : [jsonData]; // Agar single object ho toh array banayein
-        
-        // Firebase me ek sath data daalne ke liye Batch ka use karte hain
+        const questionsArray = Array.isArray(jsonData) ? jsonData : [jsonData]; 
         const batch = writeBatch(db);
         questionsArray.forEach((q) => {
-          const docRef = doc(collection(db, "questions"));
-          batch.set(docRef, q);
+          batch.set(doc(collection(db, "questions")), q);
         });
-
         await batch.commit();
         alert(`Successfully uploaded ${questionsArray.length} questions!`);
-        fetchQuestions(); // Naya data UI me laane ke liye refresh
+        fetchQuestions(); 
       } catch (error) {
-        console.error("Upload error:", error);
         alert("Invalid JSON format or Upload Failed!");
       }
     };
     reader.readAsText(file);
   };
 
-  // 3. Bulk Download Data
   const handleDownloadJSON = () => {
-    // Data se Firebase wali 'id' hata dete hain export ke time (clean data)
-    const exportData = questions.map(({ id, ...rest }) => rest);
+    // Agar kuch select kiya hai, toh sirf selected download hoga, warna sab kuch
+    const dataToExport = selectedIds.length > 0 
+      ? questions.filter(q => selectedIds.includes(q.id))
+      : questions;
+      
+    const exportData = dataToExport.map(({ id, ...rest }) => rest);
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", dataStr);
@@ -260,54 +307,89 @@ function QuestionsView() {
 
   return (
     <div className="glass-card rounded-3xl overflow-hidden">
-      <div className="p-6 border-b border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-background/40 gap-4">
-        <h3 className="font-semibold text-lg">Question Bank ({questions.length})</h3>
-        
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={handleDownloadJSON}
-            className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
-          >
-            <Download className="w-4 h-4" /> Download All
-          </button>
+      {/* Top Action Bar */}
+      <div className="p-6 border-b border-white/10 flex flex-col gap-4 bg-background/40">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            Question Bank <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded-md">{questions.length} Total</span>
+          </h3>
           
-          <input 
-            type="file" 
-            accept=".json" 
-            className="hidden" 
-            ref={fileInputRef} 
-            onChange={handleFileUpload} 
-          />
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="glow-button flex items-center gap-2 bg-foreground text-background px-4 py-2 rounded-xl text-sm font-semibold"
+          <div className="flex flex-wrap items-center gap-3">
+            {selectedIds.length > 0 && (
+              <button onClick={handleBulkDelete} className="flex items-center gap-2 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20 px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+                <Trash2 className="w-4 h-4" /> Delete ({selectedIds.length})
+              </button>
+            )}
+            <button onClick={handleDownloadJSON} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+              <Download className="w-4 h-4" /> {selectedIds.length > 0 ? "Download Selected" : "Download All"}
+            </button>
+            <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+            <button onClick={() => fileInputRef.current?.click()} className="glow-button flex items-center gap-2 bg-foreground text-background px-4 py-2 rounded-xl text-sm font-semibold">
+              <Upload className="w-4 h-4" /> Upload JSON
+            </button>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar */}
+        <div className="flex flex-col sm:flex-row gap-3 mt-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input 
+              type="text" 
+              placeholder="Search questions or subjects..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-background/50 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+            />
+          </div>
+          <select 
+            value={topicFilter}
+            onChange={(e) => setTopicFilter(e.target.value)}
+            className="bg-background/50 border border-white/10 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-full sm:w-48 transition-all"
           >
-            <Upload className="w-4 h-4" /> Upload JSON
-          </button>
+            {uniqueTopics.map(topic => (
+              <option key={topic} value={topic}>{topic === "All" ? "All Topics" : topic}</option>
+            ))}
+          </select>
         </div>
       </div>
       
       <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
         {loading ? (
-          <div className="p-8 text-center text-muted-foreground animate-pulse">Fetching real data from database...</div>
-        ) : questions.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">No questions found. Upload a JSON file to begin.</div>
+          <div className="p-8 text-center text-muted-foreground animate-pulse">Loading data...</div>
+        ) : filteredQuestions.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">No questions found matching your criteria.</div>
         ) : (
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-muted-foreground uppercase bg-background/50 border-b border-white/10 sticky top-0 z-10 backdrop-blur-md">
               <tr>
+                <th className="px-6 py-4 font-medium w-10">
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-white/20 bg-background/50 text-indigo-500 focus:ring-indigo-500"
+                    onChange={handleSelectAll}
+                    checked={filteredQuestions.length > 0 && selectedIds.length === filteredQuestions.length}
+                  />
+                </th>
                 <th className="px-6 py-4 font-medium">Subject & Topic</th>
                 <th className="px-6 py-4 font-medium">Question Preview</th>
                 <th className="px-6 py-4 font-medium">Difficulty</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {questions.map((q) => (
-                <tr key={q.id} className="hover:bg-white/5 transition-colors">
+              {filteredQuestions.map((q) => (
+                <tr key={q.id} className={cn("transition-colors", selectedIds.includes(q.id) ? "bg-indigo-500/5" : "hover:bg-white/5")}>
+                  <td className="px-6 py-4">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-white/20 bg-background/50 text-indigo-500 focus:ring-indigo-500"
+                      checked={selectedIds.includes(q.id)}
+                      onChange={() => handleSelectOne(q.id)}
+                    />
+                  </td>
                   <td className="px-6 py-4">
                     <div className="font-medium">{q.subject}</div>
-                    <div className="text-xs text-muted-foreground">{q.topic} - {q.subtopic}</div>
+                    <div className="text-xs text-muted-foreground">{q.chapterId || q.topic} {q.subtopic ? `- ${q.subtopic}` : ''}</div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="line-clamp-2 max-w-md">{q.question}</div>
@@ -318,14 +400,7 @@ function QuestionsView() {
                       q.difficulty === 'Easy' ? "bg-emerald-500/10 text-emerald-500" :
                       q.difficulty === 'Hard' ? "bg-destructive/10 text-destructive" :
                       "bg-amber-500/10 text-amber-500"
-                    )}>
-                      {q.difficulty}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="p-2 hover:bg-white/10 rounded-lg text-indigo-400 transition-colors">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+                    )}>{q.difficulty || "Medium"}</span>
                   </td>
                 </tr>
               ))}
@@ -508,5 +583,188 @@ function SettingsView() {
 }
 
 function ConceptsView() {
-    return <div>Concepts View Placeholder</div>;
+  const [concepts, setConcepts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [topicFilter, setTopicFilter] = useState("All");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const fetchConcepts = async () => {
+    setLoading(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, "concepts"));
+      const cData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setConcepts(cData);
+    } catch (error) { console.error("Error fetching concepts:", error); }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchConcepts(); }, []);
+
+  const uniqueTopics = ["All", ...Array.from(new Set(concepts.map(c => c.chapterId))).filter(Boolean)];
+  
+  const filteredConcepts = concepts.filter(c => {
+    const matchesSearch = c.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          c.subject?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTopic = topicFilter === "All" || c.chapterId === topicFilter;
+    return matchesSearch && matchesTopic;
+  });
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) setSelectedIds(filteredConcepts.map(c => c.id));
+    else setSelectedIds([]);
+  };
+
+  const handleSelectOne = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to permanently delete ${selectedIds.length} concepts?`)) return;
+
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedIds.forEach(id => {
+        batch.delete(doc(db, "concepts", id));
+      });
+      await batch.commit();
+      alert(`Successfully deleted ${selectedIds.length} concepts!`);
+      setSelectedIds([]);
+      fetchConcepts();
+    } catch (error) { alert("Failed to delete items."); }
+    setLoading(false);
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result as string);
+        const conceptsArray = Array.isArray(jsonData) ? jsonData : [jsonData]; 
+        const batch = writeBatch(db);
+        conceptsArray.forEach((c) => {
+          batch.set(doc(collection(db, "concepts")), c);
+        });
+        await batch.commit();
+        alert(`Successfully uploaded ${conceptsArray.length} concepts!`);
+        fetchConcepts(); 
+      } catch (error) { alert("Invalid JSON format or Upload Failed!"); }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDownloadJSON = () => {
+    const dataToExport = selectedIds.length > 0 
+      ? concepts.filter(c => selectedIds.includes(c.id))
+      : concepts;
+    const exportData = dataToExport.map(({ id, ...rest }) => rest);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "prepiq_concepts_backup.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
+
+  return (
+    <div className="glass-card rounded-3xl overflow-hidden">
+      <div className="p-6 border-b border-white/10 flex flex-col gap-4 bg-background/40">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            Study Concepts <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded-md">{concepts.length} Total</span>
+          </h3>
+          
+          <div className="flex flex-wrap items-center gap-3">
+            {selectedIds.length > 0 && (
+              <button onClick={handleBulkDelete} className="flex items-center gap-2 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20 px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+                <Trash2 className="w-4 h-4" /> Delete ({selectedIds.length})
+              </button>
+            )}
+            <button onClick={handleDownloadJSON} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+              <Download className="w-4 h-4" /> {selectedIds.length > 0 ? "Download Selected" : "Download All"}
+            </button>
+            <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+            <button onClick={() => fileInputRef.current?.click()} className="glow-button flex items-center gap-2 bg-foreground text-background px-4 py-2 rounded-xl text-sm font-semibold">
+              <Upload className="w-4 h-4" /> Upload JSON
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 mt-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input 
+              type="text" 
+              placeholder="Search concepts or subjects..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-background/50 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+            />
+          </div>
+          <select 
+            value={topicFilter}
+            onChange={(e) => setTopicFilter(e.target.value)}
+            className="bg-background/50 border border-white/10 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-full sm:w-48 transition-all"
+          >
+            {uniqueTopics.map(topic => (
+              <option key={topic} value={topic}>{topic === "All" ? "All Topics" : topic}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      
+      <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+        {loading ? (
+          <div className="p-8 text-center text-muted-foreground animate-pulse">Loading data...</div>
+        ) : filteredConcepts.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">No concepts found matching your criteria.</div>
+        ) : (
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-muted-foreground uppercase bg-background/50 border-b border-white/10 sticky top-0 z-10 backdrop-blur-md">
+              <tr>
+                <th className="px-6 py-4 font-medium w-10">
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-white/20 bg-background/50 text-indigo-500 focus:ring-indigo-500"
+                    onChange={handleSelectAll}
+                    checked={filteredConcepts.length > 0 && selectedIds.length === filteredConcepts.length}
+                  />
+                </th>
+                <th className="px-6 py-4 font-medium">Subject & Chapter</th>
+                <th className="px-6 py-4 font-medium">Concept Title</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filteredConcepts.map((c) => (
+                <tr key={c.id} className={cn("transition-colors", selectedIds.includes(c.id) ? "bg-indigo-500/5" : "hover:bg-white/5")}>
+                  <td className="px-6 py-4">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-white/20 bg-background/50 text-indigo-500 focus:ring-indigo-500"
+                      checked={selectedIds.includes(c.id)}
+                      onChange={() => handleSelectOne(c.id)}
+                    />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="font-medium">{c.subject}</div>
+                    <div className="text-xs text-muted-foreground">{c.chapterId}</div>
+                  </td>
+                  <td className="px-6 py-4 font-semibold text-indigo-400">
+                    {c.title}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
 }

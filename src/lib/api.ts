@@ -9,12 +9,19 @@ import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs } from "
 
 export const QuestionsAPI = {
   fetchBySubject: async (subject: string, topic?: string) => {
+    // 1. Subject check karega (exact match chahiye jaise "Mathematics")
     let q = query(collection(db, "questions"), where("subject", "==", subject));
-    if (topic) q = query(q, where("topic", "==", topic));
+    
+    // 2. JSON me URL wala topic 'chapterId' me hai (jaise "algebra")
+    if (topic) {
+      q = query(q, where("chapterId", "==", topic));
+    }
     
     const querySnapshot = await getDocs(q);
+    // JSON me "id" number nahi balki Firebase ka string ID hota hai
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   },
+  
   submitQuiz: async (results: any) => {
     const docRef = await addDoc(collection(db, "quiz_results"), results);
     return { id: docRef.id, ...results };

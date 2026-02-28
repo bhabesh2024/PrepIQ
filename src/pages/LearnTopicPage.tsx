@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, Bookmark, Share2, Settings2, Sun, Moon } from "lucide-react";
+// Unused icons (Sun, Moon, Share2) hata diye gaye hain taki linter error na de
+import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, Bookmark, Settings2 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useTheme } from "../context/ThemeContext";
 
-// Mock content generator for demonstration
+// Mock content generator
 const generateMockPages = (topicName: string) => {
   return [
     {
@@ -41,14 +41,11 @@ const generateMockPages = (topicName: string) => {
       content: `
         <h3 class="text-xl font-bold mb-4 text-foreground">Essential Rules to Remember</h3>
         <p class="mb-4 text-lg leading-relaxed">Here are the standard rules governing ${topicName}. Memorize these, but also try to derive them once to understand their origin.</p>
-        
-        <div class="glass-card p-6 rounded-2xl my-6 font-mono text-center text-lg bg-background/50">
+        <div class="glass-card p-6 rounded-2xl my-6 font-mono text-center text-lg bg-background/50 border border-border">
           Rule 1: If A implies B, and B implies C, then A implies C.
         </div>
-        
         <p class="mb-4 text-lg leading-relaxed">This transitive property is widely applicable. Let's look at a basic example to solidify this concept.</p>
-        
-        <div class="bg-muted/50 p-6 rounded-2xl my-6">
+        <div class="bg-muted/50 p-6 rounded-2xl my-6 border border-border">
           <h4 class="font-bold mb-2">Example 1:</h4>
           <p class="mb-2">Apply the rule to find the missing variable when X = 10 and Y = 20.</p>
           <p class="font-medium text-emerald-600 dark:text-emerald-400">Solution: By applying Rule 1, the result is exactly 30.</p>
@@ -92,17 +89,14 @@ const generateMockPages = (topicName: string) => {
 export function LearnTopicPage() {
   const { subjectId, topicId } = useParams<{ subjectId: string; topicId: string }>();
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
   
-  // Format topic name from ID for display
   const topicName = topicId ? topicId.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : "Topic";
   
   const [pages, setPages] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [direction, setDirection] = useState(0); // -1 for left, 1 for right
+  const [direction, setDirection] = useState(0); 
 
   useEffect(() => {
-    // Simulate fetching content
     setPages(generateMockPages(topicName));
     setCurrentPage(1);
   }, [topicName]);
@@ -124,34 +118,19 @@ export function LearnTopicPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Safe checks to prevent crash
   if (pages.length === 0) return null;
-
   const currentContent = pages[currentPage - 1];
+  if (!currentContent) return null;
 
-  // Animation variants for page turn effect
   const variants = {
-    enter: (direction: number) => {
-      return {
-        x: direction > 0 ? 50 : -50,
-        opacity: 0
-      };
-    },
-    center: {
-      zIndex: 1,
-      x: 0,
-      opacity: 1
-    },
-    exit: (direction: number) => {
-      return {
-        zIndex: 0,
-        x: direction < 0 ? 50 : -50,
-        opacity: 0
-      };
-    }
+    enter: (direction: number) => ({ x: direction > 0 ? 50 : -50, opacity: 0 }),
+    center: { zIndex: 1, x: 0, opacity: 1 },
+    exit: (direction: number) => ({ zIndex: 0, x: direction < 0 ? 50 : -50, opacity: 0 })
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f8f9fa] dark:bg-[#0a0a0a] text-foreground font-serif selection:bg-indigo-500/30 pb-24 md:pb-12">
+    <div className="flex flex-col flex-1 bg-background text-foreground">
       {/* Top Reading Progress Bar */}
       <div className="fixed top-0 left-0 right-0 h-1 bg-muted z-50">
         <div 
@@ -161,11 +140,11 @@ export function LearnTopicPage() {
       </div>
 
       {/* Reader Header */}
-      <header className="sticky top-0 z-40 bg-[#f8f9fa]/90 dark:bg-[#0a0a0a]/90 backdrop-blur-md border-b border-black/5 dark:border-white/5">
+      <header className="sticky top-0 z-40 bg-card backdrop-blur-md border-b border-border">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between font-sans">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => navigate(`/subjects/${subjectId}`)}
+              onClick={() => navigate(-1)} 
               className="p-2 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -177,12 +156,6 @@ export function LearnTopicPage() {
           </div>
           
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-muted-foreground"
-            >
-              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
             <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-muted-foreground">
               <Bookmark className="w-5 h-5" />
             </button>
@@ -225,8 +198,9 @@ export function LearnTopicPage() {
             
             {currentPage === totalPages && (
               <div className="mt-12 flex justify-center">
+                {/* Fixed the Practice link to match correct app route */}
                 <Link 
-                  to={`/practice?subject=${subjectId}&topic=${topicId}`}
+                  to={`/practice/${subjectId}/${topicId}`}
                   className="font-sans glow-button bg-indigo-500 text-white px-8 py-3 rounded-full font-medium flex items-center gap-2 hover:scale-105 transition-transform"
                 >
                   <BookOpen className="w-5 h-5" /> Start Practice
@@ -238,7 +212,7 @@ export function LearnTopicPage() {
       </main>
 
       {/* Pagination Controls */}
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 bg-gradient-to-t from-[#f8f9fa] via-[#f8f9fa]/90 to-transparent dark:from-[#0a0a0a] dark:via-[#0a0a0a]/90 pt-12 pb-6 px-4 z-30 font-sans">
+      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/90 to-transparent pt-12 pb-6 px-4 z-30 font-sans border-t border-border/50">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <button
             onClick={() => paginate(-1)}
@@ -247,7 +221,7 @@ export function LearnTopicPage() {
               "flex items-center gap-2 px-4 py-2 rounded-full transition-all",
               currentPage === 1 
                 ? "opacity-0 pointer-events-none" 
-                : "bg-white dark:bg-white/10 shadow-sm hover:shadow-md text-foreground"
+                : "bg-card border border-border shadow-sm hover:shadow-md text-foreground"
             )}
           >
             <ChevronLeft className="w-5 h-5" />
@@ -278,7 +252,7 @@ export function LearnTopicPage() {
               "flex items-center gap-2 px-4 py-2 rounded-full transition-all",
               currentPage === totalPages 
                 ? "opacity-0 pointer-events-none" 
-                : "bg-white dark:bg-white/10 shadow-sm hover:shadow-md text-foreground"
+                : "bg-card border border-border shadow-sm hover:shadow-md text-foreground"
             )}
           >
             <span className="hidden sm:inline font-medium">Next</span>
