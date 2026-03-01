@@ -19,7 +19,7 @@ import { AboutPage } from "./pages/AboutPage";
 import { SubjectsPage } from "./pages/SubjectsPage";
 import { SubjectDetailsPage } from "./pages/SubjectDetailsPage";
 import { LearnTopicPage } from "./pages/LearnTopicPage";
-
+import { MockTestsPage } from "./pages/MockTestsPage";
 export default function App() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="prepiq-theme">
@@ -33,6 +33,7 @@ export default function App() {
               <Route path="/practice" element={<SubjectsPage />} />
               <Route path="/practice/:subjectId" element={<SubjectDetailsPage />} />
               <Route path="/practice/:subjectId/:topicId" element={<PracticeSessionPage />} />
+              <Route path="/mock-tests" element={<MockTestsPage />} />
               <Route path="/quiz" element={<QuizPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/admin" element={<AdminPanel />} />
