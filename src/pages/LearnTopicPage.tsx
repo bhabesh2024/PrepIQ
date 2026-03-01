@@ -1,87 +1,37 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-// Unused icons (Sun, Moon, Share2) hata diye gaye hain taki linter error na de
-import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, Bookmark, Settings2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, Bookmark, Settings2, Lightbulb } from "lucide-react";
 import { cn } from "../lib/utils";
+import { db } from "../lib/firebase"; 
+import { collection, query, where, getDocs } from "firebase/firestore";
+import katex from 'katex';
 
-// Mock content generator
+// Mock content generator fallback
 const generateMockPages = (topicName: string) => {
   return [
     {
       pageNumber: 1,
       title: `Introduction to ${topicName}`,
       content: `
-        <p class="mb-4 text-lg leading-relaxed">Welcome to the comprehensive guide on <strong>${topicName}</strong>. This topic forms the foundational building block for advanced concepts in this subject.</p>
-        <p class="mb-4 text-lg leading-relaxed">In this chapter, we will explore the core principles, definitions, and primary classifications that you need to understand before diving into complex problem-solving.</p>
+        <p class="mb-4 text-lg leading-relaxed">Welcome to the comprehensive guide on <strong>${topicName}</strong>. This topic forms the foundational building block for advanced concepts.</p>
+        <p class="mb-4 text-lg leading-relaxed">In this chapter, we will explore the core principles that you need to understand before diving into complex problem-solving.</p>
         <h3 class="text-xl font-bold mt-8 mb-4 text-foreground">Why is this important?</h3>
-        <p class="mb-4 text-lg leading-relaxed">Understanding these basics will help you solve questions faster and with higher accuracy. Many competitive exams test your fundamental clarity rather than just your calculation speed.</p>
-        <div class="bg-indigo-500/10 border-l-4 border-indigo-500 p-4 my-6 rounded-r-xl">
-          <p class="text-indigo-700 dark:text-indigo-300 font-medium">Pro Tip: Always focus on the 'Why' before the 'How'. Memorizing formulas without understanding the underlying concept often leads to mistakes in tricky questions.</p>
-        </div>
-      `
+        <p class="mb-4 text-lg leading-relaxed">Understanding these basics will help you solve questions faster and with higher accuracy.</p>
+      `,
+      proTip: "Always focus on the 'Why' before the 'How'. Memorizing formulas without understanding the underlying concept often leads to mistakes in tricky questions."
     },
     {
       pageNumber: 2,
-      title: `Core Concepts & Definitions`,
-      content: `
-        <h3 class="text-xl font-bold mb-4 text-foreground">Primary Classifications</h3>
-        <p class="mb-4 text-lg leading-relaxed">Let's break down the primary classifications within ${topicName}. These categories help in organizing the information logically.</p>
-        <ul class="list-disc pl-6 mb-6 space-y-2 text-lg text-muted-foreground">
-          <li><strong class="text-foreground">Type A:</strong> The most common category, frequently asked in preliminary exams.</li>
-          <li><strong class="text-foreground">Type B:</strong> Involves multi-step reasoning and is usually found in mains or advanced tiers.</li>
-          <li><strong class="text-foreground">Type C:</strong> Exceptional cases and anomalies that test your depth of knowledge.</li>
-        </ul>
-        <p class="mb-4 text-lg leading-relaxed">Make sure to take notes of the exceptions, as examiners love to test students on the boundaries of a rule.</p>
-      `
-    },
-    {
-      pageNumber: 3,
       title: `Formulas and Rules`,
       content: `
         <h3 class="text-xl font-bold mb-4 text-foreground">Essential Rules to Remember</h3>
-        <p class="mb-4 text-lg leading-relaxed">Here are the standard rules governing ${topicName}. Memorize these, but also try to derive them once to understand their origin.</p>
+        <p class="mb-4 text-lg leading-relaxed">Here are the standard rules governing ${topicName}. Memorize these, but also try to derive them once.</p>
         <div class="glass-card p-6 rounded-2xl my-6 font-mono text-center text-lg bg-background/50 border border-border">
-          Rule 1: If A implies B, and B implies C, then A implies C.
+          Rule 1: Practice makes perfect.
         </div>
-        <p class="mb-4 text-lg leading-relaxed">This transitive property is widely applicable. Let's look at a basic example to solidify this concept.</p>
-        <div class="bg-muted/50 p-6 rounded-2xl my-6 border border-border">
-          <h4 class="font-bold mb-2">Example 1:</h4>
-          <p class="mb-2">Apply the rule to find the missing variable when X = 10 and Y = 20.</p>
-          <p class="font-medium text-emerald-600 dark:text-emerald-400">Solution: By applying Rule 1, the result is exactly 30.</p>
-        </div>
-      `
-    },
-    {
-      pageNumber: 4,
-      title: `Advanced Application`,
-      content: `
-        <h3 class="text-xl font-bold mb-4 text-foreground">Tackling Complex Problems</h3>
-        <p class="mb-4 text-lg leading-relaxed">Now that we have covered the basics of ${topicName}, let's move on to advanced applications. These questions often combine multiple concepts.</p>
-        <p class="mb-4 text-lg leading-relaxed">The key to solving advanced problems is breaking them down into smaller, manageable parts. Don't get overwhelmed by the length of the question.</p>
-        <div class="bg-amber-500/10 border border-amber-500/20 p-6 rounded-2xl my-6">
-          <h4 class="font-bold text-amber-600 dark:text-amber-400 mb-2">Common Pitfall</h4>
-          <p class="text-amber-700 dark:text-amber-300">Students often rush to apply a formula without checking if the conditions for that formula are met. Always verify the prerequisites!</p>
-        </div>
-      `
-    },
-    {
-      pageNumber: 5,
-      title: `Summary & Next Steps`,
-      content: `
-        <h3 class="text-xl font-bold mb-4 text-foreground">Chapter Summary</h3>
-        <p class="mb-4 text-lg leading-relaxed">Congratulations on completing the theory for ${topicName}! Let's quickly recap what we've learned:</p>
-        <ul class="list-disc pl-6 mb-8 space-y-2 text-lg text-muted-foreground">
-          <li>Understood the foundational definitions.</li>
-          <li>Learned the primary classifications and exceptions.</li>
-          <li>Memorized and applied the essential rules.</li>
-          <li>Explored advanced problem-solving strategies.</li>
-        </ul>
-        <p class="mb-4 text-lg leading-relaxed">Your next step should be to practice as many questions as possible. Theory is only 20% of the preparation; the rest is practice.</p>
-        <div class="text-center mt-8">
-          <p class="text-muted-foreground mb-4">Ready to test your knowledge?</p>
-        </div>
-      `
+      `,
+      proTip: "Try to derive the formula by yourself. It builds strong muscle memory."
     }
   ];
 };
@@ -96,10 +46,72 @@ export function LearnTopicPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [direction, setDirection] = useState(0); 
 
+    // --- NAYA FUNCTION: HTML ke andar se $...$ dhundh kar Math banayega ---
+  const renderHtmlWithMath = (htmlString: string) => {
+    if (!htmlString) return "";
+    return htmlString.replace(/\$(.*?)\$/g, (match, math) => {
+      try {
+        return katex.renderToString(math, { throwOnError: false, displayMode: false });
+      } catch (e) {
+        return match;
+      }
+    });
+  };
+
+  // --- NAYA FETCH LOGIC ---
   useEffect(() => {
-    setPages(generateMockPages(topicName));
+    const fetchConcepts = async () => {
+      try {
+        // NAYA LOGIC: URL ke short name ko Database ke real name se match karne ke liye Dictionary
+        const subjectMap: Record<string, string> = {
+          "maths": "Mathematics",
+          "reasoning": "Reasoning",
+          "english": "English",
+          "gk": "General Knowledge",
+          "current-affairs": "Current Affairs",
+          "science-tech": "Science & Tech",
+          "computer": "Computer"
+        };
+        
+        // Agar URL me 'maths' hai toh ye automatic usko 'Mathematics' bana dega
+        const formattedSubject = subjectId ? (subjectMap[subjectId] || subjectId) : "Mathematics";
+        const formattedTopic = topicId || "algebra";
+        
+        const q = query(
+          collection(db, "concepts"),
+          where("subject", "==", formattedSubject),
+          where("chapterId", "==", formattedTopic)
+        );
+        
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map((doc, index) => {
+          const docData = doc.data();
+          return {
+            id: doc.id,
+            pageNumber: docData.pageNumber || index + 1,
+            title: docData.title || `Concept ${index + 1}`,
+            content: docData.content || "",
+            proTip: docData.proTip || null,
+            ...docData
+          };
+        });
+        
+        if (data.length > 0) {
+          data.sort((a, b) => a.pageNumber - b.pageNumber);
+          setPages(data);
+        } else {
+          setPages(generateMockPages(topicName));
+        }
+      } catch (error) {
+        console.error("Error fetching concepts", error);
+        setPages(generateMockPages(topicName));
+      }
+    };
+    
+    fetchConcepts();
     setCurrentPage(1);
-  }, [topicName]);
+  }, [subjectId, topicId, topicName]);
+
 
   const totalPages = pages.length;
 
@@ -118,7 +130,6 @@ export function LearnTopicPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Safe checks to prevent crash
   if (pages.length === 0) return null;
   const currentContent = pages[currentPage - 1];
   if (!currentContent) return null;
@@ -140,7 +151,7 @@ export function LearnTopicPage() {
       </div>
 
       {/* Reader Header */}
-      <header className="sticky top-0 z-40 bg-card backdrop-blur-md border-b border-border">
+      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b border-border">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between font-sans">
           <div className="flex items-center gap-4">
             <button 
@@ -167,7 +178,7 @@ export function LearnTopicPage() {
       </header>
 
       {/* Reader Content Area */}
-      <main className="max-w-3xl mx-auto px-6 sm:px-12 py-12 md:py-16 min-h-[60vh]">
+      <main className="max-w-3xl mx-auto w-full px-6 sm:px-12 py-12 pb-32 min-h-[70vh]">
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={currentPage}
@@ -176,10 +187,7 @@ export function LearnTopicPage() {
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{
-              x: { type: "spring", stiffness: 300, damping: 30 },
-              opacity: { duration: 0.2 }
-            }}
+            transition={{ x: { type: "spring", stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
             className="reader-content"
           >
             <div className="mb-12 text-center">
@@ -193,50 +201,64 @@ export function LearnTopicPage() {
             
             <div 
               className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-sans prose-p:text-foreground/90 prose-p:leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: currentContent.content }}
+              dangerouslySetInnerHTML={{ __html: renderHtmlWithMath(currentContent.content) }}
             />
             
-            {currentPage === totalPages && (
-              <div className="mt-12 flex justify-center">
-                {/* Fixed the Practice link to match correct app route */}
-                <Link 
-                  to={`/practice/${subjectId}/${topicId}`}
-                  className="font-sans glow-button bg-indigo-500 text-white px-8 py-3 rounded-full font-medium flex items-center gap-2 hover:scale-105 transition-transform"
-                >
-                  <BookOpen className="w-5 h-5" /> Start Practice
-                </Link>
+            {/* --- NAYA HIGH CONTRAST PRO TIP BOX --- */}
+            {currentContent.proTip && (
+              <div className="relative overflow-hidden bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/30 p-6 sm:p-8 my-10 rounded-3xl shadow-md">
+                {/* Background Watermark Icon */}
+                <div className="absolute -top-6 -right-6 p-4 opacity-10 dark:opacity-10 pointer-events-none">
+                  <Lightbulb className="w-40 h-40 text-amber-700 dark:text-amber-400" />
+                </div>
+                
+                <div className="relative z-10">
+                  <h4 className="flex items-center gap-2 font-extrabold text-amber-800 dark:text-amber-500 mb-3 uppercase tracking-widest text-xs">
+                    <span className="p-1.5 rounded-lg bg-amber-500/20 dark:bg-amber-500/20">
+                      <Lightbulb className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                    </span>
+                    Pro Tip
+                  </h4>
+                  {/* Light Mode me Dark Black (text-gray-900), Dark mode me White (text-gray-100) */}
+                  <p className="text-gray-900 dark:text-gray-100 font-semibold text-[15px] sm:text-[17px] leading-relaxed">
+                    {currentContent.proTip}
+                  </p>
+                </div>
               </div>
             )}
+            {/* --- PRO TIP BOX END --- */}
+            
           </motion.div>
         </AnimatePresence>
       </main>
 
-      {/* Pagination Controls */}
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/90 to-transparent pt-12 pb-6 px-4 z-30 font-sans border-t border-border/50">
+      {/* Pagination Controls - Start Practice Button is inside here now! */}
+      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border/50 pt-4 pb-4 sm:pb-6 px-4 z-50 font-sans shadow-[0_-10px_40px_rgba(0,0,0,0.05)] dark:shadow-none transition-all">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
+          
           <button
             onClick={() => paginate(-1)}
             disabled={currentPage === 1}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-full transition-all",
+              "flex items-center gap-2 px-4 py-2.5 rounded-full transition-all",
               currentPage === 1 
                 ? "opacity-0 pointer-events-none" 
-                : "bg-card border border-border shadow-sm hover:shadow-md text-foreground"
+                : "bg-card border border-border shadow-sm hover:bg-black/5 dark:hover:bg-white/5 text-foreground"
             )}
           >
             <ChevronLeft className="w-5 h-5" />
-            <span className="hidden sm:inline font-medium">Previous</span>
+            <span className="hidden sm:inline font-semibold text-sm">Previous</span>
           </button>
 
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {pages.map((page) => (
               <button
                 key={page.pageNumber}
                 onClick={() => goToPage(page.pageNumber)}
                 className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all",
+                  "w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all",
                   currentPage === page.pageNumber
-                    ? "bg-indigo-500 text-white shadow-md scale-110"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20 scale-110"
                     : "text-muted-foreground hover:bg-black/5 dark:hover:bg-white/10 hover:text-foreground"
                 )}
               >
@@ -245,19 +267,26 @@ export function LearnTopicPage() {
             ))}
           </div>
 
-          <button
-            onClick={() => paginate(1)}
-            disabled={currentPage === totalPages}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-full transition-all",
-              currentPage === totalPages 
-                ? "opacity-0 pointer-events-none" 
-                : "bg-card border border-border shadow-sm hover:shadow-md text-foreground"
-            )}
-          >
-            <span className="hidden sm:inline font-medium">Next</span>
-            <ChevronRight className="w-5 h-5" />
-          </button>
+          {/* DYNAMIC NEXT / START PRACTICE BUTTON */}
+          {currentPage === totalPages ? (
+            <Link 
+              to={`/practice/${subjectId}/${topicId}`}
+              className="flex items-center gap-2 px-5 sm:px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-600/20 transition-all transform hover:scale-105 active:scale-95"
+            >
+              <span className="hidden sm:inline">Start Practice</span>
+              <span className="sm:hidden">Practice</span>
+              <BookOpen className="w-4 h-4" />
+            </Link>
+          ) : (
+            <button
+              onClick={() => paginate(1)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full transition-all bg-card border border-border shadow-sm hover:bg-black/5 dark:hover:bg-white/5 text-foreground"
+            >
+              <span className="hidden sm:inline font-semibold text-sm">Next</span>
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          )}
+
         </div>
       </div>
     </div>

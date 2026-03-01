@@ -12,7 +12,6 @@ import katex from 'katex';
 import { db } from "../lib/firebase"; 
 import { collection, addDoc } from "firebase/firestore"; 
 
-// Update kiya gaya Type jisme examReference shamil hai
 type Question = {
   id: string;
   question: string;
@@ -44,6 +43,12 @@ const MathText = ({ text }: { text: string }) => {
   );
 };
 
+// 100% BUG FREE STRING MATCHER (Ye spaces aur $ ko ignore karke match karega)
+const normalizeStr = (s: string | undefined) => {
+  if (!s) return "";
+  return String(s).replace(/[\$\s]/g, '').toLowerCase();
+};
+
 export function PracticeSessionPage() {
   const { subjectId, topicId } = useParams<{ subjectId: string; topicId: string }>();
   const navigate = useNavigate();
@@ -59,7 +64,6 @@ export function PracticeSessionPage() {
 
   const [language, setLanguage] = useState<"en" | "hi">("en");
   
-  // Naye Report States
   const [isReporting, setIsReporting] = useState(false);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -122,7 +126,6 @@ export function PracticeSessionPage() {
     }
   };
 
-  // --- MODERN REPORT LOGIC ---
   const handleReportSelect = (reason: string) => {
     setReportMenuOpen(false);
     if (reason === "Other") {
@@ -212,14 +215,15 @@ export function PracticeSessionPage() {
   if (isFinished) {
     const totalQuestions = questions.length;
     const attempted = Object.keys(userAnswers).length;
+    
+    // Result calculation me bhi Safe Matching
     const correctAnswers = Object.entries(userAnswers).filter(
       ([index, answer]) => {
         const question = questions[Number(index)];
-        const safeUserAnswer = answer.replace(/\$/g, '').trim().toLowerCase();
-        const safeCorrectAnswer = question.answer.replace(/\$/g, '').trim().toLowerCase();
-        return safeUserAnswer === safeCorrectAnswer;
+        return normalizeStr(answer) === normalizeStr(question.answer);
       }
     ).length;
+    
     const wrongAnswers = attempted - correctAnswers;
     const accuracy = attempted > 0 ? Math.round((correctAnswers / attempted) * 100) : 0;
 
@@ -275,10 +279,9 @@ export function PracticeSessionPage() {
   const displayExplanationText = language === "hi" && currentQuestion.explanationHindi ? currentQuestion.explanationHindi : currentQuestion.explanation;
 
   return (
-    // 'fixed inset-0' hata diya gaya hai. Ab global Navbar dikhega aur Global Theme apply hogi.
     <div className="flex flex-col flex-1 bg-background text-foreground">
       
-      {/* Modern Report Modal (For "Other" Reason) */}
+      {/* Modern Report Modal */}
       <AnimatePresence>
         {reportModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
@@ -342,7 +345,6 @@ export function PracticeSessionPage() {
                       <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">
                         Question {currentIndex + 1}
                       </span>
-                      {/* JSON KA EXAM REFERENCE YAHAN AAYEGA */}
                       {currentQuestion.examReference && (
                         <span className="bg-amber-500/10 text-amber-600 dark:text-amber-500 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
                           <Landmark className="w-3.5 h-3.5" /> {currentQuestion.examReference}
@@ -361,7 +363,6 @@ export function PracticeSessionPage() {
                         <Share2 className="w-3.5 h-3.5" /> Share
                       </button>
                       
-                      {/* MODERN DROPDOWN REPORT BUTTON */}
                       <div className="relative hidden sm:block">
                         <button onClick={() => setReportMenuOpen(!reportMenuOpen)} disabled={isReporting} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-black/5 dark:bg-white/5 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50">
                           <Flag className="w-3.5 h-3.5" /> {isReporting ? "Reporting..." : "Report"}
@@ -391,11 +392,8 @@ export function PracticeSessionPage() {
                   {currentQuestion.options.map((option, idx) => {
                     const isSelected = selectedAnswer === option;
                     
-                    // --- NAYA 100% SAFE MATCHING LOGIC ---
-                    // Ye $ sign, extra spaces, aur capital/small letters ko automatically hata kar match karega
-                    const safeOption = option.replace(/\$/g, '').trim().toLowerCase();
-                    const safeAnswer = currentQuestion.answer.replace(/\$/g, '').trim().toLowerCase();
-                    const isCorrectOption = safeOption === safeAnswer;
+                    // --- 100% BULLETPROOF MATCHING ---
+                    const isCorrectOption = normalizeStr(option) === normalizeStr(currentQuestion.answer);
                     
                     const showCorrect = isAnswered && isCorrectOption;
                     const showIncorrect = isAnswered && isSelected && !isCorrectOption;
@@ -437,16 +435,18 @@ export function PracticeSessionPage() {
                 <AnimatePresence>
                   {isAnswered && displayExplanationText && (
                     <motion.div initial={{ opacity: 0, height: 0, marginTop: 0 }} animate={{ opacity: 1, height: "auto", marginTop: 32 }} className="overflow-hidden">
-                      {/* NAYA CLEAR DESIGN (Light mode me Emerald 50, Dark mode me soft dark) */}
-                      <div className="bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl p-6 border border-emerald-200 dark:border-emerald-500/20 shadow-sm">
-                        <h3 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                          <Sparkles className="w-4 h-4" /> Explanation
+                      
+                      {/* --- HIGH CONTRAST CLEAR EXPLANATION BOX --- */}
+                      <div className="bg-white dark:bg-[#1a1d24] rounded-2xl p-6 border-2 border-emerald-500 dark:border-emerald-500/50 shadow-sm">
+                        <h3 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <Sparkles className="w-5 h-5" /> Explanation
                         </h3>
-                        {/* Text color ko dark aur clear kiya gaya hai */}
-                        <div className="text-gray-900 dark:text-gray-100 leading-relaxed text-[15px] sm:text-base font-medium">
+                        {/* High contrast text-gray-900 bina kisi blur class ke */}
+                        <div className="text-gray-900 dark:text-gray-100 font-medium text-base leading-relaxed">
                           <MathText text={displayExplanationText} />
                         </div>
                       </div>
+
                     </motion.div>
                   )}
                 </AnimatePresence>
